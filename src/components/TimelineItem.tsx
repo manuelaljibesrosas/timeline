@@ -1,4 +1,4 @@
-import { ContextType, useContext } from "react";
+import { ContextType, useCallback, useContext } from "react";
 import {
   ReactCalendarItemRendererProps,
   TimelineItem as TTimelineItem,
@@ -20,6 +20,14 @@ const TimelineItem: React.FC<ReactCalendarItemRendererProps> = ({
     ContextType<typeof TimelineContext>
   >;
 
+  const setSelectedItem = useCallback(() => {
+    timeline.setSelectedItem(item);
+  }, [timeline, item]);
+
+  const removeItem = useCallback(() => {
+    timeline.removeItem(item.id);
+  }, [timeline, item]);
+
   return (
     <div
       {...props}
@@ -40,17 +48,13 @@ const TimelineItem: React.FC<ReactCalendarItemRendererProps> = ({
         <div className="flex flex-row gap-[8px]">
           <div
             className="cursor-pointer flex flex-row justify-center items-center w-[35px] h-[35px] rounded-full bg-[#1b1f20] text-[#fff]"
-            onClick={() => {
-              timeline.setSelectedItem(item);
-            }}
+            onClick={setSelectedItem}
           >
             <ion-icon name="create-outline" />
           </div>
           <div
             className="cursor-pointer flex flex-row justify-center items-center w-[35px] h-[35px] rounded-full bg-[#1b1f20] text-[#fff]"
-            onClick={() => {
-              timeline.removeItem(item.id);
-            }}
+            onClick={removeItem}
           >
             <ion-icon name="trash-outline" />
           </div>
