@@ -1,32 +1,15 @@
-import { ContextType, useCallback, useContext, useEffect, useRef } from "react";
+import {
+  ContextType,
+  MouseEventHandler,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+} from "react";
 import { Controller, useForm } from "react-hook-form";
 import { TimelineContext } from "../App";
 import { easings, interpolate, run, sequence, unit } from "tween-fn";
-
-const convertTimestampToDatetimeLocalString = (t: number) => {
-  const date = new Date(t);
-
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, "0");
-  const day = date.getDate().toString().padStart(2, "0");
-  const hours = date.getHours().toString().padStart(2, "0");
-  const minutes = date.getMinutes().toString().padStart(2, "0");
-  const seconds = "00";
-
-  // Combine date-time components
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-};
-
-const datetimeLocalToTimestamp = (formattedDate: string) => {
-  const [datePart, timePart] = formattedDate.split("T");
-  const [year, month, day] = datePart.split("-").map(Number);
-  const [hour, minute] = timePart.split(":").map(Number);
-
-  // Note: The month in the Date constructor is 0-indexed.
-  const dateObj = new Date(year, month - 1, day, hour, minute);
-
-  return dateObj.getTime();
-};
+import { convertTimestampToDatetimeLocalString, datetimeLocalToTimestamp } from "../utils";
 
 type TFormInputs = {
   title: string;
@@ -64,58 +47,64 @@ const EditEntryForm = () => {
     });
   }, [selectedItem, form]);
 
+  const introAnimationSequence = useCallback(() => {
+    const seq = sequence([
+      unit({
+        duration: 160,
+        ease: easings.SQUARED,
+        change: (y) => {
+          const entryFormNode = entryForm.current as HTMLFormElement;
+          const backdropNode = entryFormBackdrop.current as HTMLDivElement;
+          Object.assign(entryFormNode.style, {
+            opacity: `${interpolate(y, 1, 0)}`,
+            transform: `translate(-50%, -50%) scale(${interpolate(y, 1, 0.9)})`,
+          });
+          Object.assign(backdropNode.style, {
+            opacity: `${interpolate(y, 1, 0)}`,
+          });
+        },
+      }),
+    ]);
+    run(seq);
+  }, []);
+
+  const outroAnimationSequence = useCallback(() => {
+    const seq = sequence([
+      unit({
+        duration: 160,
+        ease: easings.SQUARED,
+        change: (y) => {
+          const entryFormNode = entryForm.current as HTMLFormElement;
+          const backdropNode = entryFormBackdrop.current as HTMLDivElement;
+          Object.assign(entryFormNode.style, {
+            opacity: `${interpolate(y, 0, 1)}`,
+            transform: `translate(-50%, calc(-50% + ${interpolate(
+              y,
+              10,
+              0
+            )}px))`,
+          });
+          Object.assign(backdropNode.style, {
+            opacity: `${interpolate(y, 0.5, 1)}`,
+          });
+        },
+      }),
+    ]);
+    run(seq);
+  }, []);
+
   useEffect(() => {
-    if (selectedItem === null) {
-      const seq = sequence([
-        unit({
-          duration: 160,
-          ease: easings.SQUARED,
-          change: (y) => {
-            const entryFormNode = entryForm.current as HTMLFormElement;
-            const backdropNode = entryFormBackdrop.current as HTMLDivElement;
-            Object.assign(entryFormNode.style, {
-              opacity: `${interpolate(y, 1, 0)}`,
-              transform: `translate(-50%, -50%) scale(${interpolate(
-                y,
-                1,
-                0.9
-              )})`,
-            });
-            Object.assign(backdropNode.style, {
-              opacity: `${interpolate(y, 1, 0)}`,
-            });
-          },
-          complete: () => {
-            setSelectedItem(null);
-          },
-        }),
-      ]);
-      run(seq);
-    } else {
-      const seq = sequence([
-        unit({
-          duration: 160,
-          ease: easings.SQUARED,
-          change: (y) => {
-            const entryFormNode = entryForm.current as HTMLFormElement;
-            const backdropNode = entryFormBackdrop.current as HTMLDivElement;
-            Object.assign(entryFormNode.style, {
-              opacity: `${interpolate(y, 0, 1)}`,
-              transform: `translate(-50%, calc(-50% + ${interpolate(
-                y,
-                10,
-                0
-              )}px))`,
-            });
-            Object.assign(backdropNode.style, {
-              opacity: `${interpolate(y, 0.5, 1)}`,
-            });
-          },
-        }),
-      ]);
-      run(seq);
-    }
-  }, [selectedItem, setSelectedItem]);
+    if (selectedItem === null) introAnimationSequence();
+    else outroAnimationSequence();
+  }, [selectedItem, introAnimationSequence, outroAnimationSequence]);
+
+  const cancel = useCallback(() => {
+    setSelectedItem(null);
+  }, [setSelectedItem]);
+
+  const stopPropagation = useCallback<MouseEventHandler<HTMLElement>>((e) => {
+    e.stopPropagation();
+  }, []);
 
   const handleSubmit = useCallback(
     (values: TFormInputs) => {
@@ -130,15 +119,15 @@ const EditEntryForm = () => {
         description: values.description,
       });
 
-      setSelectedItem(null);
+      cancel();
     },
-    [updateItem, selectedItem, setSelectedItem]
+    [updateItem, selectedItem, cancel]
   );
 
   return (
     <div
       ref={entryFormBackdrop}
-      onClick={() => setSelectedItem(null)}
+      onClick={cancel}
       className={`pointer-events-${
         selectedItem === null ? "none" : "auto"
       } z-[9999] fixed top-0 left-0 w-screen h-screen bg-[rgba(0,0,0,0.5)]`}
@@ -146,7 +135,7 @@ const EditEntryForm = () => {
       <form
         onSubmit={form.handleSubmit(handleSubmit)}
         ref={entryForm}
-        onClick={(e) => e.stopPropagation()}
+        onClick={stopPropagation}
         className="-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 flex flex-col gap-[32px] max-w-[calc(100%-30px)] w-[400px] p-[16px] rounded-[8px] bg-[#222325]"
       >
         <div className="flex flex-col gap-[16px]">
@@ -183,9 +172,9 @@ const EditEntryForm = () => {
                   type="datetime-local"
                   placeholder="start date"
                   value={convertTimestampToDatetimeLocalString(value)}
-                  onChange={(e) =>
-                    onChange(datetimeLocalToTimestamp(e.target.value))
-                  }
+                  onChange={(e) => {
+                    onChange(datetimeLocalToTimestamp(e.target.value));
+                  }}
                   max={convertTimestampToDatetimeLocalString(
                     form.getValues().endDateTime
                   )}
@@ -202,9 +191,9 @@ const EditEntryForm = () => {
                   type="datetime-local"
                   placeholder="end date"
                   value={convertTimestampToDatetimeLocalString(value)}
-                  onChange={(e) =>
-                    onChange(datetimeLocalToTimestamp(e.target.value))
-                  }
+                  onChange={(e) => {
+                    onChange(datetimeLocalToTimestamp(e.target.value));
+                  }}
                   className="border-0 bg-transparent text-[#fff]"
                   {...field}
                 />
@@ -226,9 +215,7 @@ const EditEntryForm = () => {
         <div className="flex flex-row justify-between">
           <button
             className="cursor-pointer h-[35px] px-[16px] text-[10px] uppercase leading-[35px] rounded-[8px] bg-[#000] text-[#fff]"
-            onClick={() => {
-              setSelectedItem(null);
-            }}
+            onClick={cancel}
           >
             {"Cancel"}
           </button>
